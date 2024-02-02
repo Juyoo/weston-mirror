@@ -851,9 +851,31 @@ rail_client_LangbarInfo(RailServerContext *context,
 }
 
 /* GUID_CHTIME_BOPOMOFO is not defined in FreeRDP */
+#ifndef GUID_CHTIME_BOPOMOFO
 #define GUID_CHTIME_BOPOMOFO \
 { \
 	0xB115690A, 0xEA02, 0x48D5, 0xA2, 0x31, 0xE3, 0x57, 0x8D, 0x2F, 0xDF, 0x80 \
+}
+#endif
+
+/* Define GUID for Google IME */
+#define GUID_GOOGLEIME_JPN \
+{ \
+	0xd5a86fd5, 0x5308, 0x47ea, 0xad, 0x16, 0x9c, 0x4e, 0xb1, 0x60, 0xec, 0x3c \
+}
+
+#define GUID_PROFILE_GOOGLEIME_JPN \
+{ \
+	0x773eb24e, 0xca1d, 0x4b1b, 0xb4, 0x20, 0xfa, 0x98, 0x5b, 0xb0, 0xb8, 0x0d \
+}
+
+static void
+rdp_debug_raw_guid_string(struct rdp_backend *b, const GUID *guid)
+{
+	rdp_debug_continue(b, "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		guid->Data1, guid->Data2, guid->Data3,
+		guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
+		guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
 }
 
 static char *
@@ -861,7 +883,8 @@ languageGuid_to_string(const GUID *guid)
 {
 	static_assert(sizeof(struct lang_GUID) == sizeof(GUID));
 	static const struct lang_GUID c_GUID_NULL = GUID_NULL;
-	static const struct lang_GUID c_GUID_JPNIME = GUID_MSIME_JPN;
+	static const struct lang_GUID c_GUID_MS_JPNIME = GUID_MSIME_JPN;
+	static const struct lang_GUID c_GUID_GOOGLE_JPNIME = GUID_GOOGLEIME_JPN;
 	static const struct lang_GUID c_GUID_KORIME = GUID_MSIME_KOR;
 	static const struct lang_GUID c_GUID_CHSIME = GUID_CHSIME;
 	static const struct lang_GUID c_GUID_CHTIME = GUID_CHTIME;
@@ -873,13 +896,16 @@ languageGuid_to_string(const GUID *guid)
 	static const struct lang_GUID c_GUID_PROFILE_PINYIN = GUID_PROFILE_PINYIN;
 	static const struct lang_GUID c_GUID_PROFILE_SIMPLEFAST = GUID_PROFILE_SIMPLEFAST;
 	static const struct lang_GUID c_GUID_PROFILE_MSIME_JPN = GUID_GUID_PROFILE_MSIME_JPN;
+	static const struct lang_GUID c_GUID_PROFILE_GOOGLEIME_JPN = GUID_PROFILE_GOOGLEIME_JPN;
 	static const struct lang_GUID c_GUID_PROFILE_MSIME_KOR = GUID_PROFILE_MSIME_KOR;
 
 	RPC_STATUS rpc_status;
 	if (UuidEqual(guid, (GUID *)&c_GUID_NULL, &rpc_status))
 		return "GUID_NULL";
-	else if (UuidEqual(guid, (GUID *)&c_GUID_JPNIME, &rpc_status))
-		return "GUID_JPNIME";
+	else if (UuidEqual(guid, (GUID *)&c_GUID_MS_JPNIME, &rpc_status))
+		return "GUID_MS_JPNIME";
+	else if (UuidEqual(guid, (GUID *)&c_GUID_GOOGLE_JPNIME, &rpc_status))
+		return "GUID_GOOGLE_JPNIME";
 	else if (UuidEqual(guid, (GUID *)&c_GUID_KORIME, &rpc_status))
 		return "GUID_KORIME";
 	else if (UuidEqual(guid, (GUID *)&c_GUID_CHSIME, &rpc_status))
@@ -902,6 +928,8 @@ languageGuid_to_string(const GUID *guid)
 		return "GUID_PROFILE_SIMPLEFAST";
 	else if (UuidEqual(guid, (GUID *)&c_GUID_PROFILE_MSIME_JPN, &rpc_status))
 		return "GUID_PROFILE_MSIME_JPN";
+	else if (UuidEqual(guid, (GUID *)&c_GUID_PROFILE_GOOGLEIME_JPN, &rpc_status))
+		return "GUID_PROFILE_GOOGLEIME_JPN";
 	else if (UuidEqual(guid, (GUID *)&c_GUID_PROFILE_MSIME_KOR, &rpc_status))
 		return "GUID_PROFILE_MSIME_KOR";
 	else
@@ -940,10 +968,17 @@ rail_client_LanguageImeInfo_callback(bool freeOnly, void *arg)
 		  languageImeInfo->ProfileType, s);
 	rdp_debug(b, "Client: LanguageImeInfo: LanguageID: 0x%x\n",
 		  languageImeInfo->LanguageID);
-	rdp_debug(b, "Client: LanguageImeInfo: LanguageProfileCLSID: %s\n",
+
+	rdp_debug(b, "Client: LanguageImeInfo: LanguageProfileCLSID: %s : ",
 		  languageGuid_to_string(&languageImeInfo->LanguageProfileCLSID));
-	rdp_debug(b, "Client: LanguageImeInfo: ProfileGUID: %s\n",
+	rdp_debug_raw_guid_string(b, &languageImeInfo->LanguageProfileCLSID);
+	rdp_debug_continue(b, "\n");
+
+	rdp_debug(b, "Client: LanguageImeInfo: ProfileGUID: %s : ",
 		  languageGuid_to_string(&languageImeInfo->ProfileGUID));
+	rdp_debug_raw_guid_string(b, &languageImeInfo->ProfileGUID);
+	rdp_debug_continue(b, "\n");
+
 	rdp_debug(b, "Client: LanguageImeInfo: KeyboardLayout: 0x%x\n",
 		  languageImeInfo->KeyboardLayout);
 
@@ -953,7 +988,8 @@ rail_client_LanguageImeInfo_callback(bool freeOnly, void *arg)
 		} else if (languageImeInfo->ProfileType == TF_PROFILETYPE_INPUTPROCESSOR) {
 			static_assert(sizeof(struct lang_GUID) == sizeof(GUID));
 
-			static const struct lang_GUID c_GUID_JPNIME = GUID_MSIME_JPN;
+			static const struct lang_GUID c_GUID_MS_JPNIME = GUID_MSIME_JPN;
+			static const struct lang_GUID c_GUID_GOOGLE_JPNIME = GUID_GOOGLEIME_JPN;
 			static const struct lang_GUID c_GUID_KORIME = GUID_MSIME_KOR;
 			static const struct lang_GUID c_GUID_CHSIME = GUID_CHSIME;
 			static const struct lang_GUID c_GUID_CHTIME = GUID_CHTIME;
@@ -961,7 +997,10 @@ rail_client_LanguageImeInfo_callback(bool freeOnly, void *arg)
 
 			RPC_STATUS rpc_status;
 			if (UuidEqual(&languageImeInfo->LanguageProfileCLSID,
-				      (GUID *)&c_GUID_JPNIME, &rpc_status))
+				      (GUID *)&c_GUID_MS_JPNIME, &rpc_status))
+				new_keyboard_layout = KBD_JAPANESE;
+			else if (UuidEqual(&languageImeInfo->LanguageProfileCLSID,
+				      (GUID *)&c_GUID_GOOGLE_JPNIME, &rpc_status))
 				new_keyboard_layout = KBD_JAPANESE;
 			else if (UuidEqual(&languageImeInfo->LanguageProfileCLSID,
 					   (GUID *)&c_GUID_KORIME, &rpc_status))
@@ -3590,6 +3629,7 @@ rdp_rail_sync_window_status(freerdp_peer *client)
 	RailServerContext *rail_ctx = peer_ctx->rail_server_context;
 	rdpUpdate *update = b->rdp_peer->context->update;
 	struct weston_view *view;
+	bool anyWindowCreated = false;
 
 	assert_compositor_thread(b);
 
@@ -3671,7 +3711,7 @@ rdp_rail_sync_window_status(freerdp_peer *client)
 
 	peer_ctx->activationRailCompleted = true;
 
-	wl_list_for_each(view, &b->compositor->view_list, link) {
+	wl_list_for_each_reverse(view, &b->compositor->view_list, link) {
 		struct weston_surface *surface = view->surface;
 		struct weston_subsurface *sub;
 		struct weston_surface_rail_state *rail_state = surface->backend_state;
@@ -3682,7 +3722,7 @@ rdp_rail_sync_window_status(freerdp_peer *client)
 			if (rail_state && rail_state->window_id) {
 				if (api && api->request_window_icon)
 					api->request_window_icon(surface);
-				wl_list_for_each(sub, &surface->subsurface_list, parent_link) {
+				wl_list_for_each_reverse(sub, &surface->subsurface_list, parent_link) {
 					struct weston_surface_rail_state *sub_rail_state = sub->surface->backend_state;
 					if (sub->surface == surface)
 						continue;
@@ -3690,11 +3730,17 @@ rdp_rail_sync_window_status(freerdp_peer *client)
 						rdp_rail_create_window(NULL, sub->surface);
 				}
 			}
+			anyWindowCreated = true;
 		}
 	}
 
-	/* this assume repaint to be scheduled on idle loop, not directly from here */
-	weston_compositor_damage_all(b->compositor);
+	if (anyWindowCreated) {
+		/* resync window zorder with RDP client */
+		peer_ctx->is_window_zorder_dirty = true;
+		/* this assume repaint to be scheduled on idle loop, not directly from here */
+		weston_compositor_wake(b->compositor);
+		weston_compositor_damage_all(b->compositor);
+	}
 }
 
 static void
@@ -3707,6 +3753,7 @@ rdp_rail_send_window_minmax_info(
 	struct weston_compositor *compositor = surface->compositor;
 	struct weston_surface_rail_state *rail_state = surface->backend_state;
 	struct rdp_backend *b = to_rdp_backend(compositor);
+	struct weston_output *output = rdp_output_get_primary(compositor);
 	RdpPeerContext *peer_ctx;
 	RailServerContext *rail_ctx;
 	RAIL_MINMAXINFO_ORDER minmax_order;
@@ -3719,14 +3766,16 @@ rdp_rail_send_window_minmax_info(
 	peer_ctx = (RdpPeerContext *)b->rdp_peer->context;
 
 	/* apply global to output transform, and translate to client coordinate */
-	if (surface->output) {
-		to_client_coordinate(peer_ctx, surface->output,
+	/* minmax info is based on primary monitor */
+	/* https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-minmaxinfo */
+	if (output) {
+		to_client_coordinate(peer_ctx, output,
 				     &maxPosSize->x, &maxPosSize->y,
 				     &maxPosSize->width, &maxPosSize->height);
-		to_client_coordinate(peer_ctx, surface->output,
+		to_client_coordinate(peer_ctx, output,
 				     &dummyX, &dummyY,
 				     &minTrackSize->width, &minTrackSize->height);
-		to_client_coordinate(peer_ctx, surface->output,
+		to_client_coordinate(peer_ctx, output,
 				     &dummyX, &dummyY,
 				     &maxTrackSize->width, &maxTrackSize->height);
 	}
